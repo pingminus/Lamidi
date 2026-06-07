@@ -109,8 +109,19 @@
     <script>
       let ws;
       let midiData;
+      let worker;
 
       const WS_URL = "wss://piano.laby.net/piano";
+
+      // Initialize worker
+      worker = new Worker("midi-worker.js");
+      worker.onmessage = (e) => {
+        const { type, payload } = e.data;
+        if (type === "sendNote" && ws && ws.readyState === 1) {
+          ws.send(JSON.stringify(payload));
+          console.log("Sent:", payload);
+        }
+      };
 
       function setStatus(text) {
         document.getElementById("status").innerHTML =
@@ -175,22 +186,13 @@
 
         events.sort((a, b) => a.time - b.time);
 
-        events.forEach((event) => {
-          const delay = event.time * 1000;
-
-          setTimeout(() => {
-            const payload = {
-              type: "note",
-              note: event.midi,
-              velocity: Math.floor(event.velocity * 127),
-              duration: event.duration,
-            };
-
-            ws.send(JSON.stringify(payload));
-
-            console.log("Sent:", payload);
-          }, delay);
+        // Send events to worker for accurate timing (not throttled by background tabs)
+        worker.postMessage({
+          type: "start",
+          data: events,
         });
+
+        setStatus("Playing...");
       }
     </script>
   </body>
